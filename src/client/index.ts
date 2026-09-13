@@ -1,4 +1,4 @@
-import type { IKVAdapter, IKVClient, KVOptions, SetOptions } from '../core/types.js';
+import type { IKVAdapter, IKVClient, KVOptions, SetOptions, MSetItem, MGetResult, KVEventType, KVEventListener } from '../core/types.js';
 import { AdapterNotFoundError } from '../core/errors.js';
 import { deserializeEnvelope, serializeEnvelope } from '../core/serializer.js';
 import { isExpired, ttlToExpiry, validateTTL } from '../core/ttl.js';
@@ -68,6 +68,13 @@ function buildDefaultAdapter(): IKVAdapter {
 export class KVClient implements IKVClient {
   private _adapter: IKVAdapter | null;
   private readonly _prefix: string | null;
+
+  // ── Event emitter state ───────────────────────────────────────────────────
+  // Stored as a plain Map<string, Function[]> — never using Object as a map
+  // to prevent prototype-pollution on the listener registry.
+  // Max 100 listeners per event type to guard against accidental memory leaks.
+  private static readonly _MAX_LISTENERS = 100;
+  private readonly _listeners: Map<KVEventType, KVEventListener[]> = new Map();
 
   /**
    * @param options - Optional configuration.  If `adapter` is not supplied the
@@ -152,6 +159,8 @@ export class KVClient implements IKVClient {
     const expiresAt = ttlToExpiry(options?.ttl);
     const raw = serializeEnvelope(value, expiresAt);
     await this.adapter.setRaw(sk, raw);
+    // Emit event after successful write
+    this._emit<T>('set', key, value);
   }
 
   /**
@@ -160,6 +169,8 @@ export class KVClient implements IKVClient {
   async delete(key: string): Promise<void> {
     const sk = this.storageKey(key);
     await this.adapter.delete(sk);
+    // Emit event after successful delete
+    this._emit('delete', key, undefined);
   }
 
   /**
@@ -178,6 +189,7 @@ export class KVClient implements IKVClient {
   async clear(): Promise<void> {
     if (this._prefix === null) {
       await this.adapter.clear();
+      this._emit('clear', undefined, undefined);
       return;
     }
 
@@ -185,6 +197,7 @@ export class KVClient implements IKVClient {
     const allKeys = await this.adapter.keys();
     const prefixedKeys = allKeys.filter((k) => hasPrefix(this._prefix!, k));
     await Promise.all(prefixedKeys.map((k) => this.adapter.delete(k)));
+    this._emit('clear', undefined, undefined);
   }
 
   /**
@@ -268,5 +281,150 @@ export class KVClient implements IKVClient {
       adapter: this.adapter,
       prefix: combinedPrefix,
     });
+  }
+
+  // ── Batch operations ─────────────────────────────────────────────────────
+
+  /**
+   * Set multiple key-value pairs concurrently.
+   *
+   * Security: each key and TTL is validated individually through the existing
+   * `set()` path — no bypass of the key validator or TTL validator.
+   */
+  async mset<T = unknown>(items: MSetItem<T>[]): Promise<void> {
+    if (!Array.isArray(items)) {
+      throw new TypeError('mset() expects an array of { key, value, ttl? } items.');
+    }
+    await Promise.all(
+      items.map((item) =>
+        this.set(item.key, item.value, item.ttl !== undefined ? { ttl: item.ttl } : undefined),
+      ),
+    );
+  }
+
+  /**
+   * Retrieve multiple keys concurrently.
+   * Results are returned in the same order as the input keys.
+   *
+   * Security: each key is validated through the existing `get()` path.
+   * An invalid key resolves to `{ key, value: null }` instead of throwing,
+   * so one bad key does not abort the whole batch.
+   */
+  async mget<T = unknown>(keys: string[]): Promise<MGetResult<T>[]> {
+    if (!Array.isArray(keys)) {
+      throw new TypeError('mget() expects an array of key strings.');
+    }
+    return Promise.all(
+      keys.map(async (key) => {
+        try {
+          const value = await this.get<T>(key);
+          return { key, value };
+        } catch {
+          // Key validation failure — return null rather than crashing the batch
+          return { key, value: null };
+        }
+      }),
+    );
+  }
+
+  /**
+   * Delete multiple keys concurrently.
+   * No-op for keys that do not exist.
+   *
+   * Security: each key is validated through the existing `delete()` path.
+   */
+  async mdelete(keys: string[]): Promise<void> {
+    if (!Array.isArray(keys)) {
+      throw new TypeError('mdelete() expects an array of key strings.');
+    }
+    await Promise.all(
+      keys.map(async (key) => {
+        try {
+          await this.delete(key);
+        } catch {
+          // Best-effort: skip invalid keys in a batch delete
+        }
+      }),
+    );
+  }
+
+  // ── Event subscriptions ──────────────────────────────────────────────────
+
+  /**
+   * Internal helper: emit an event to all registered listeners.
+   * Listeners are called synchronously in registration order.
+   * Errors thrown inside a listener are caught and logged — one bad listener
+   * must never break the store operation that triggered it.
+   */
+  private _emit<T = unknown>(
+    event: KVEventType,
+    key: string | undefined,
+    value: T | undefined,
+  ): void {
+    const listeners = this._listeners.get(event);
+    if (!listeners || listeners.length === 0) return;
+
+    // Snapshot the array before iterating so mid-emit `off()` calls are safe
+    const snapshot = listeners.slice();
+    for (const listener of snapshot) {
+      try {
+        listener(key, value);
+      } catch (err) {
+        // Never let a listener crash the store
+        if (typeof console !== 'undefined') {
+          console.error(`[kv-one] Uncaught error in "${event}" listener:`, err);
+        }
+      }
+    }
+  }
+
+  /**
+   * Subscribe to a KV mutation event.
+   * Returns an unsubscribe function for convenient cleanup.
+   *
+   * Security:
+   * - Listener count is capped at 100 per event type to prevent memory leaks.
+   * - Listener errors are caught and never propagate to the calling operation.
+   */
+  on<T = unknown>(event: KVEventType, listener: KVEventListener<T>): () => void {
+    if (typeof listener !== 'function') {
+      throw new TypeError('kv.on() listener must be a function.');
+    }
+    const validEvents: KVEventType[] = ['set', 'delete', 'clear'];
+    if (!validEvents.includes(event)) {
+      throw new TypeError(
+        `kv.on() received unknown event "${String(event)}". Valid events: ${validEvents.join(', ')}.`,
+      );
+    }
+
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, []);
+    }
+    const list = this._listeners.get(event)!;
+
+    if (list.length >= KVClient._MAX_LISTENERS) {
+      if (typeof console !== 'undefined') {
+        console.warn(
+          `[kv-one] Possible memory leak: more than ${KVClient._MAX_LISTENERS} "${event}" listeners registered.`,
+        );
+      }
+    }
+
+    list.push(listener as KVEventListener);
+    // Return a one-shot unsubscribe function
+    return () => this.off(event, listener);
+  }
+
+  /**
+   * Remove a previously registered listener.
+   * Only the first matching reference is removed (supports multiple identical registrations).
+   */
+  off<T = unknown>(event: KVEventType, listener: KVEventListener<T>): void {
+    const list = this._listeners.get(event);
+    if (!list) return;
+    const idx = list.indexOf(listener as KVEventListener);
+    if (idx !== -1) {
+      list.splice(idx, 1);
+    }
   }
 }

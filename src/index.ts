@@ -10,14 +10,19 @@
 export { KVClient } from './client/index.js';
 export { createKV } from './client/factory.js';
 
-// ── Adapters ──────────────────────────────────────────────────────────────
+// ── Adapters ─────────────────────────────────────────────────────────────────────────────
 export { MemoryAdapter } from './adapters/memory.js';
 export { LocalStorageAdapter } from './adapters/local-storage.js';
 export { SessionStorageAdapter } from './adapters/session-storage.js';
 export { CloudflareAdapter } from './adapters/cloudflare.js';
 export type { CFKVNamespace, CloudflareAdapterOptions } from './adapters/cloudflare.js';
+// Persistent adapters (v1.1.0)
+export { IndexedDBAdapter } from './adapters/indexed-db.js';
+export type { IndexedDBAdapterOptions } from './adapters/indexed-db.js';
+export { NodeFileAdapter } from './adapters/node-file.js';
+export type { NodeFileAdapterOptions } from './adapters/node-file.js';
 
-// ── Core types ────────────────────────────────────────────────────────────
+// ── Core types ─────────────────────────────────────────────────────────────────────────────
 export type {
   IKVAdapter,
   IKVClient,
@@ -25,6 +30,12 @@ export type {
   SetOptions,
   StoredEnvelope,
   RuntimeKind,
+  // Batch operation types (v1.1.0)
+  MSetItem,
+  MGetResult,
+  // Event subscription types (v1.1.0)
+  KVEventType,
+  KVEventListener,
 } from './core/types.js';
 
 // ── Errors ────────────────────────────────────────────────────────────────
