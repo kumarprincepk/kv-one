@@ -51,16 +51,16 @@
     "runtime-agnostic",
     "framework-agnostic"
   ],
-  "author": "kv-one contributors",
+  "author": "Prince Kumar",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/kv-one.git"
+    "url": "https://github.com/kumarprincepk/kv-one.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/kv-one/issues"
+    "url": "https://github.com/kumarprincepk/kv-one/issues"
   },
-  "homepage": "https://github.com/your-org/kv-one#readme",
+  "homepage": "https://github.com/kumarprincepk/kv-one#readme",
   "sideEffects": false,
   "peerDependencies": {
     "react": ">=17.0.0"
