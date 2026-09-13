@@ -372,7 +372,7 @@ export class KVClient implements IKVClient {
       } catch (err) {
         // Never let a listener crash the store
         if (typeof console !== 'undefined') {
-          console.error(`[kv-one] Uncaught error in "${event}" listener:`, err);
+          console.error(`[kv-one] Uncaught error in "${event}" listener:`, err); // eslint-disable-line no-console
         }
       }
     }
@@ -404,7 +404,7 @@ export class KVClient implements IKVClient {
 
     if (list.length >= KVClient._MAX_LISTENERS) {
       if (typeof console !== 'undefined') {
-        console.warn(
+        console.warn( // eslint-disable-line no-console
           `[kv-one] Possible memory leak: more than ${KVClient._MAX_LISTENERS} "${event}" listeners registered.`,
         );
       }

@@ -23,10 +23,10 @@
 import { BaseAdapter } from './base.js';
 import { AdapterError } from '../core/errors.js';
 
-// Dynamic imports ensure this adapter is tree-shaken in browser/CF bundles
-// and never tries to resolve `node:fs` in non-Node environments.
-type FsPromises = typeof import('node:fs/promises');
-type NodePath = typeof import('node:path');
+// `import type` ensures these are fully erased at runtime — no Node.js module
+// is loaded in browser or Cloudflare Workers environments.
+import type * as FsPromises from 'node:fs/promises';
+import type * as NodePath from 'node:path';
 
 export interface NodeFileAdapterOptions {
   /**
@@ -81,11 +81,11 @@ export class NodeFileAdapter extends BaseAdapter {
 
   // ── Private helpers ──────────────────────────────────────────────────────
 
-  private async _getFsModules(): Promise<{ fs: FsPromises; path: NodePath }> {
+  private async _getFsModules(): Promise<{ fs: typeof FsPromises; path: typeof NodePath }> {
     try {
       const [fs, path] = await Promise.all([
-        import('node:fs/promises') as Promise<FsPromises>,
-        import('node:path') as Promise<NodePath>,
+        import('node:fs/promises') as Promise<typeof FsPromises>,
+        import('node:path') as Promise<typeof NodePath>,
       ]);
       return { fs, path };
     } catch {
