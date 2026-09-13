@@ -60,8 +60,8 @@ function detectRuntimeUncached(): RuntimeKind {
   // ── 3. Node.js ────────────────────────────────────────────────────────────
   if (
     typeof process !== 'undefined' &&
-    process.versions != null &&
-    process.versions.node != null
+    process.versions !== null &&
+    process.versions.node !== null
   ) {
     return 'node';
   }
