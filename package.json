@@ -1,6 +1,6 @@
 {
   "name": "kv-one",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A runtime-adaptive, framework-agnostic Key-Value store for Browser, Node.js, and Cloudflare Workers — one API everywhere.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -38,24 +38,40 @@
   "keywords": [
     "kv",
     "key-value",
+    "key-value-store",
     "storage",
     "universal",
     "edge",
     "cloudflare",
-    "workers",
+    "cloudflare-workers",
+    "cloudflare-kv",
     "browser",
     "node",
+    "nodejs",
     "ttl",
     "cache",
+    "caching",
     "localStorage",
+    "sessionStorage",
     "runtime-agnostic",
-    "framework-agnostic"
+    "framework-agnostic",
+    "async",
+    "typescript",
+    "zero-dependency",
+    "react",
+    "useKV",
+    "namespacing",
+    "expiry",
+    "persistent-storage",
+    "isomorphic",
+    "ssr-safe",
+    "edge-runtime"
   ],
   "author": "Prince Kumar",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kumarprincepk/kv-one.git"
+    "url": "git+https://github.com/kumarprincepk/kv-one.git"
   },
   "bugs": {
     "url": "https://github.com/kumarprincepk/kv-one/issues"
