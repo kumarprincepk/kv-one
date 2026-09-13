@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/logo.jpg" alt="kv-one logo" width="250" />
+</p>
+
 # kv-one
 
 > A runtime-adaptive, framework-agnostic Key-Value store for Browser, Node.js, and Cloudflare Workers — **one API everywhere**.
